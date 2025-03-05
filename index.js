@@ -185,25 +185,10 @@ async function updateDeploymentMirrorTraffic(
 }
 
 try {
-    // const endpointName = core.getInput("endpoint_name");
-    // const resourceGroup = core.getInput("resource_group");
-    // const workspaceName = core.getInput("workspace_name");
-    // const registryName = core.getInput("registry_name");
-    // const registryResourceGroup = core.getInput("registry_resource_group");
-    // const modelName = core.getInput("model_name");
-    // const modelVersion = core.getInput("model_version");
-    // const traffic = core.getInput("traffic");
-    // const deploymentYamlFilePath = core.getInput("deployment_yaml_file_path");
-
-    const endpointName = "test-endpoint-github-actions";
-    const resourceGroup = "dev-ats-rg";
-    const workspaceName = "dev-ats-llm-ws";
-    const registryName = "";
-    const registryResourceGroup = "";
-    const modelName = "sklearn-model";
-    const modelVersion = "1";
-    const traffic = '{ "blue": 100 }';
-    const deploymentYamlFilePath = "deployment.yaml";
+    const endpointName = core.getInput("endpoint_name");
+    const resourceGroup = core.getInput("resource_group");
+    const workspaceName = core.getInput("workspace_name");
+    const traffic = core.getInput("traffic");
 
     // Check if the required inputs are provided
     if (!endpointName || endpointName === "") {
@@ -216,23 +201,6 @@ try {
 
     if (!workspaceName || workspaceName === "") {
         throw new Error("Workspace name is required");
-    }
-
-    if (!modelName || modelName === "") {
-        throw new Error("Model name is required");
-    }
-
-    if (!modelVersion || modelVersion === "") {
-        throw new Error("Model version is required");
-    }
-
-    if (!traffic || traffic === "") {
-        throw new Error("Traffic is required");
-    }
-
-    // Check if deployment YAML file exists
-    if (!deploymentYamlFilePath || deploymentYamlFilePath === "") {
-        throw new Error("Deployment YAML file path is required.");
     }
 
     // Check if the resource group exists
@@ -269,54 +237,58 @@ try {
         console.log(`✅ Endpoint '${endpointName}' exists in resource group '${resourceGroup}' and workspace '${workspaceName}''${resourceGroup}'.`);
     }
 
-    // Parse the traffic input
-    const trafficObj = JSON.parse(traffic);
+    if (traffic !== undefined && traffic !== "") {
+        console.log(`🔹 Updating traffic for endpoint '${endpointName}'...`);
 
-    // Get values for "mirror"
-    const trafficEntry = trafficObj["mirror"];
+        // Parse the traffic input
+        const trafficObj = JSON.parse(traffic);
 
-    // Check if "mirror" is present in the traffic object
-    if (trafficEntry) {
-        // Iterate through the keys of the "mirror" object
-        for (const key in trafficEntry) {
-            console.log(`🔹 Updating deployment '${key}' with mirror traffic '${trafficObj[key]}%'...`);
+        // Get values for "mirror"
+        const trafficEntry = trafficObj["mirror"];
 
-            // Update the mirror traffic
-            let updateMirrorTraffic = await updateDeploymentMirrorTraffic(
-                resourceGroup, workspaceName, endpointName, key, trafficEntry[key]
+        // Check if "mirror" is present in the traffic object
+        if (trafficEntry) {
+            // Iterate through the keys of the "mirror" object
+            for (const key in trafficEntry) {
+                console.log(`🔹 Updating deployment '${key}' with mirror traffic '${trafficObj[key]}%'...`);
+
+                // Update the mirror traffic
+                let updateMirrorTraffic = await updateDeploymentMirrorTraffic(
+                    resourceGroup, workspaceName, endpointName, key, trafficEntry[key]
+                );
+
+                if (!updateMirrorTraffic) {
+                    console.log(`❌ Mirror traffic for '${key}' update failed.`);
+                } else {
+                    console.log(`✅ Mirror traffic for '${key}' updated successfully.`);
+                }
+            }
+        } else {
+            console.log("🔹 No mirror traffic specified.");
+        }
+
+        // Get the keys of the traffic object except "mirror"
+        const prodKeys = Object.keys(trafficObj).filter(key => key !== "mirror");
+
+        // Iterate through the keys of the traffic object and update each deployment
+        for (const key of prodKeys) {
+            console.log(`🔹 Updating deployment '${key}' with traffic '${trafficObj[key]}%'...`);
+
+            // Update the traffic for the deployment
+            let updateTraffic = await updateDeploymentTraffic(
+                resourceGroup, workspaceName, endpointName, key, trafficObj[key]
             );
 
-            if (!updateMirrorTraffic) {
-                console.log(`❌ Mirror traffic for '${key}' update failed.`);
+            if (!updateTraffic) {
+                console.log(`❌ Traffic for deployment '${key}' update failed.`);
             } else {
-                console.log(`✅ Mirror traffic for '${key}' updated successfully.`);
+                console.log(
+                    `✅ Traffic for deployment '${key}' updated successfully.`
+                );
             }
         }
-    } else {
-        console.log("🔹 No mirror traffic specified.");
+        console.log("✅ Deployment traffic updated successfully.");
     }
-
-    // Get the keys of the traffic object except "mirror"
-    const prodKeys = Object.keys(trafficObj).filter(key => key !== "mirror");
-
-    // Iterate through the keys of the traffic object and update each deployment
-    for (const key of prodKeys) {
-        console.log(`🔹 Updating deployment '${key}' with traffic '${trafficObj[key]}%'...`);
-
-        // Update the traffic for the deployment
-        let updateTraffic = await updateDeploymentTraffic(
-            resourceGroup, workspaceName, endpointName, key, trafficObj[key]
-        );
-
-        if (!updateTraffic) {
-            console.log(`❌ Traffic for deployment '${key}' update failed.`);
-        } else {
-            console.log(
-                `✅ Traffic for deployment '${key}' updated successfully.`
-            );
-        }
-    }
-    console.log("✅ Deployment traffic updated successfully.");
 } catch (error) {
     console.log(error.message);
     core.setFailed(`❌ Action failed: ${error.message}`);
